@@ -36,11 +36,19 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-      - name: Select latest available Xcode
+      - name: List available Xcode versions on this runner
+        run: ls -d /Applications/Xcode_*.app | sort -V
+
+      - name: Select a stable Xcode version (avoid bleeding-edge builds that may have SPM download bugs)
         run: |
-          LATEST=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
-          echo "Using $LATEST"
-          sudo xcode-select -s "$LATEST"
+          # Prefer a mature 16.x release over the newest (possibly unstable) Xcode on the image.
+          CANDIDATE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$CANDIDATE" ]; then
+            CANDIDATE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+            echo "No Xcode 16.x found, falling back to newest available: $CANDIDATE"
+          fi
+          echo "Using $CANDIDATE"
+          sudo xcode-select -s "$CANDIDATE"
           xcodebuild -version
 
       - name: Disable Gatekeeper online checks on this ephemeral CI runner (user-authorized)
