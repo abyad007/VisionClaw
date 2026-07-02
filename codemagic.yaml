@@ -1,0 +1,62 @@
+workflows:
+  ios-unsigned-build:
+    name: iOS unsigned build (Sideloadly)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      xcode: 16.4
+      vars:
+        XCODE_PROJECT: "samples/CameraAccess/CameraAccess.xcodeproj"
+        XCODE_SCHEME: "CameraAccess"
+      groups:
+        - visionclaw_secrets  # define GEMINI_API_KEY and META_SDK_PAT here in Codemagic UI
+    scripts:
+      - name: Configure git for private SPM package (facebook/meta-wearables-dat-ios)
+        script: |
+          git config --global url."https://x-access-token:${META_SDK_PAT}@github.com/".insteadOf "https://github.com/"
+
+      - name: Create Secrets.swift
+        script: |
+          cat > samples/CameraAccess/CameraAccess/Secrets.swift <<EOF
+          import Foundation
+
+          enum Secrets {
+            static let geminiAPIKey = "${GEMINI_API_KEY}"
+            static let openClawHost = "http://YOUR_MAC_HOSTNAME.local"
+            static let openClawPort = 18789
+            static let openClawHookToken = "YOUR_OPENCLAW_HOOK_TOKEN"
+            static let openClawGatewayToken = "YOUR_OPENCLAW_GATEWAY_TOKEN"
+            static let webrtcSignalingURL = "ws://YOUR_MAC_IP:8080"
+          }
+          EOF
+
+      - name: Resolve Swift Package dependencies
+        script: |
+          cd samples/CameraAccess
+          xcodebuild -resolvePackageDependencies -project CameraAccess.xcodeproj -scheme CameraAccess
+
+      - name: Build unsigned .app for iOS device
+        script: |
+          cd samples/CameraAccess
+          xcodebuild build \
+            -project CameraAccess.xcodeproj \
+            -scheme CameraAccess \
+            -configuration Debug \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: Package into .ipa (unsigned, for Sideloadly to resign)
+        script: |
+          cd samples/CameraAccess
+          APP_PATH="build/Build/Products/Debug-iphoneos/CameraAccess.app"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r CameraAccess-unsigned.ipa Payload
+          rm -rf Payload
+    artifacts:
+      - samples/CameraAccess/CameraAccess-unsigned.ipa
