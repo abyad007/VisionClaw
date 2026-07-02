@@ -43,6 +43,11 @@ jobs:
           sudo xcode-select -s "$LATEST"
           xcodebuild -version
 
+      - name: Disable Gatekeeper online checks on this ephemeral CI runner (user-authorized)
+        run: |
+          sudo spctl --master-disable || true
+          sudo spctl --status || true
+
       - name: Pre-fetch WebRTC xcframework directly (bypass SPM's stalled download)
         run: |
           mkdir -p /tmp/webrtc-prefetch
