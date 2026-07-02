@@ -6,6 +6,7 @@ on:
 jobs:
   build:
     runs-on: macos-15
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: samples/CameraAccess
@@ -43,7 +44,27 @@ jobs:
           xcodebuild -version
 
       - name: Resolve Swift Package dependencies
-        run: xcodebuild -resolvePackageDependencies -project CameraAccess.xcodeproj -scheme CameraAccess
+        timeout-minutes: 25
+        run: |
+          attempt=1
+          max=3
+          until [ $attempt -gt $max ]; do
+            echo "Attempt $attempt/$max"
+            xcodebuild -resolvePackageDependencies -project CameraAccess.xcodeproj -scheme CameraAccess &
+            pid=$!
+            ( sleep 420; kill -9 $pid 2>/dev/null ) &
+            watcher=$!
+            if wait $pid; then
+              kill $watcher 2>/dev/null || true
+              exit 0
+            fi
+            kill $watcher 2>/dev/null || true
+            echo "Attempt $attempt failed or stalled (likely the WebRTC binary download), retrying..."
+            attempt=$((attempt+1))
+            sleep 10
+          done
+          echo "All attempts failed"
+          exit 1
 
       - name: Build unsigned .app for iOS device
         run: |
