@@ -43,6 +43,15 @@ jobs:
           sudo xcode-select -s "$LATEST"
           xcodebuild -version
 
+      - name: Pre-fetch WebRTC xcframework directly (bypass SPM's stalled download)
+        run: |
+          mkdir -p /tmp/webrtc-prefetch
+          curl -fL --retry 3 --max-time 120 \
+            -o /tmp/webrtc-prefetch/WebRTC-M140.xcframework.zip \
+            "https://github.com/stasel/WebRTC/releases/download/140.0.0/WebRTC-M140.xcframework.zip"
+          ls -la /tmp/webrtc-prefetch/
+          shasum -a 256 /tmp/webrtc-prefetch/WebRTC-M140.xcframework.zip
+
       - name: Resolve Swift Package dependencies
         timeout-minutes: 25
         run: |
